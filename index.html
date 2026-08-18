@@ -111,6 +111,7 @@
   }
   .btn:hover{filter:brightness(1.05)}
   .btn.secondary{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+  .btn.secondary.active{background:var(--accent);color:#0f1830;border-color:var(--accent)}
   .btn:disabled{opacity:.45;cursor:not-allowed}
 
   /* Graph */
@@ -201,6 +202,7 @@
       <div class="canvaswrap"><canvas id="graph"></canvas></div>
       <div class="toolrow">
         <label><input type="checkbox" id="connectChk"> Connect each car's points</label>
+        <button class="btn secondary" id="fitBtn">📈 Best-fit line</button>
         <span class="spacer"></span>
         <button class="btn secondary" id="exportBtn">⬇ CSV</button>
         <button class="btn secondary" id="clearBtn">Clear data</button>
@@ -330,6 +332,7 @@ function selectCar(car){
   curCar.textContent = car.name;
   trackCar.innerHTML = carSVG(car.color);
   resetCarPosition();
+  if(fitShown) drawGraph();   // best-fit line follows the selected car
 }
 
 /* ---------- Track geometry ---------- */
@@ -453,6 +456,18 @@ function renderTable(){
 /* ---------- Graph ---------- */
 const canvas = $('#graph');
 const ctx = canvas.getContext('2d');
+let fitShown = false;
+
+/* least-squares fit d = m*t + b for a set of {t,d} points */
+function linFit(pts){
+  const n=pts.length; let sx=0,sy=0,sxx=0,sxy=0;
+  pts.forEach(p=>{sx+=p.t; sy+=p.d; sxx+=p.t*p.t; sxy+=p.t*p.d;});
+  const den = n*sxx - sx*sx;
+  if(Math.abs(den) < 1e-9) return null;
+  const m = (n*sxy - sx*sy)/den;
+  const b = (sy - m*sx)/n;
+  return {m,b};
+}
 function sizeCanvas(){ drawGraph(); }  // kept for callers; drawGraph self-sizes below
 function drawGraph(){
   // Re-sync the backing store to the CSS box on every draw. The plot area can
@@ -512,6 +527,43 @@ function drawGraph(){
       ctx.stroke(); ctx.globalAlpha=1;
     });
   }
+  // best-fit line for the selected car
+  if(fitShown){
+    const pts = trials.filter(tr=>tr.carId===selected.id);
+    if(pts.length>=2){
+      const f = linFit(pts);
+      if(f){
+        ctx.save();
+        ctx.beginPath(); ctx.rect(padL,padT,plotW,plotH); ctx.clip();  // keep line inside axes
+        ctx.strokeStyle=selected.color; ctx.lineWidth=2.5; ctx.setLineDash([7,5]);
+        ctx.beginPath();
+        ctx.moveTo(X(0), Y(f.b));
+        ctx.lineTo(X(tmax), Y(f.m*tmax + f.b));
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // equation label next to the right-most data point on the line
+        const anchorT = Math.max(...pts.map(p=>p.t));
+        const anchorD = f.m*anchorT + f.b;
+        const sign = f.b>=0 ? '+' : '−';
+        const label = `d = ${f.m.toFixed(2)}·t ${sign} ${Math.abs(f.b).toFixed(2)}`;
+        ctx.font='bold 12px -apple-system,sans-serif';
+        ctx.textAlign='left'; ctx.textBaseline='middle';
+        const tw = ctx.measureText(label).width;
+        let lx = X(anchorT)+12, ly = Y(anchorD)-12;
+        if(lx+tw+8 > padL+plotW) lx = X(anchorT)-tw-12;          // flip left near edge
+        ly = Math.max(padT+11, Math.min(padT+plotH-11, ly));      // keep on-canvas
+        ctx.fillStyle='rgba(12,20,40,.88)';
+        ctx.fillRect(lx-6, ly-10, tw+12, 20);
+        ctx.strokeStyle=selected.color; ctx.lineWidth=1.5;
+        ctx.strokeRect(lx-6, ly-10, tw+12, 20);
+        ctx.fillStyle=selected.color;
+        ctx.fillText(label, lx, ly);
+      }
+    }
+  }
+
   // points
   trials.forEach(tr=>{
     const x=X(Math.min(tr.t,tmax)), y=Y(Math.min(tr.d,dmax));
@@ -538,6 +590,11 @@ function renderLegend(){
 
 /* ---------- Toolbar ---------- */
 connectChk.onchange = drawGraph;
+$('#fitBtn').onclick = ()=>{
+  fitShown = !fitShown;
+  $('#fitBtn').classList.toggle('active', fitShown);
+  drawGraph();
+};
 $('#clearBtn').onclick = ()=>{ if(confirm('Clear all trial data?')){ trials=[]; renderTable(); drawGraph(); } };
 $('#exportBtn').onclick = ()=>{
   if(!trials.length){ alert('No trials to export yet.'); return; }
