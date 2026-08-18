@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Speed Lab — Distance vs. Time</title>
+<style>
+  :root{
+    --bg:#0f1830;
+    --panel:#16213e;
+    --panel2:#1d2b52;
+    --ink:#eaf0ff;
+    --muted:#9fb0d6;
+    --line:#2c3d6b;
+    --accent:#ffd166;
+    --track:#243459;
+    --road:#33456f;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+  header{
+    display:flex;align-items:center;gap:12px;
+    padding:10px 18px;
+    background:linear-gradient(180deg,#1a2748,#131f3c);
+    border-bottom:1px solid var(--line);
+  }
+  header h1{font-size:18px;margin:0;letter-spacing:.3px}
+  header .tag{font-size:12px;color:var(--muted);font-weight:500}
+  header .spacer{flex:1}
+  .helpbtn{
+    background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;
+  }
+  .helpbtn:hover{border-color:var(--accent)}
+
+  main{
+    display:flex;height:calc(100% - 49px);
+  }
+  .pane{padding:14px 16px;overflow:auto}
+  .left{flex:1.05;min-width:0;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+  .right{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:0 0 8px}
+
+  /* Garage */
+  .garage{display:flex;flex-wrap:wrap;gap:8px}
+  .carbtn{
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    background:var(--panel2);border:2px solid transparent;border-radius:12px;
+    padding:8px 10px 6px;cursor:pointer;min-width:74px;transition:.12s;
+  }
+  .carbtn:hover{border-color:var(--line)}
+  .carbtn.sel{border-color:var(--accent);background:#20315c}
+  .carbtn svg{width:52px;height:28px}
+  .carbtn .nm{font-size:12px;color:var(--muted)}
+  .carbtn.sel .nm{color:var(--ink);font-weight:600}
+
+  /* Track */
+  .trackwrap{position:relative;user-select:none}
+  .readout{display:flex;align-items:baseline;gap:14px;margin-bottom:8px;flex-wrap:wrap}
+  .readout .big{font-size:15px}
+  .readout b{color:var(--accent)}
+  .track{
+    position:relative;height:96px;background:var(--road);
+    border-radius:12px;border:1px solid var(--line);overflow:hidden;
+    background-image:linear-gradient(180deg,#3a4d7d,#2a3a63);
+  }
+  .lane{position:absolute;left:0;right:0;top:50%;height:0;border-top:3px dashed rgba(255,255,255,.18)}
+  .startline{position:absolute;top:0;bottom:0;width:0;border-left:3px solid rgba(255,255,255,.5)}
+  .car-on-track{position:absolute;top:calc(50% - 20px);width:64px;height:34px;transition:none;pointer-events:none}
+  .flag{
+    position:absolute;top:0;bottom:0;width:26px;margin-left:-13px;cursor:grab;
+    touch-action:none;display:flex;justify-content:center;
+  }
+  .flag:active{cursor:grabbing}
+  .flag .pole{position:absolute;top:0;bottom:0;width:3px;background:var(--accent);left:50%;margin-left:-1.5px}
+  .flag .checker{
+    position:absolute;top:6px;left:50%;width:22px;height:16px;
+    background:
+      conic-gradient(#111 90deg,#fff 90deg 180deg,#111 180deg 270deg,#fff 270deg) 0 0/11px 8px;
+    border:1px solid #000;
+  }
+  .flag .distlbl{
+    position:absolute;top:26px;left:50%;transform:translateX(-50%);
+    font-size:11px;color:#0f1830;background:var(--accent);
+    padding:1px 5px;border-radius:6px;white-space:nowrap;font-weight:700;
+  }
+  .ruler{position:relative;height:34px;margin-top:2px}
+  .ruler .tick{position:absolute;top:0;width:1px;background:var(--muted)}
+  .ruler .lbl{position:absolute;top:14px;transform:translateX(-50%);font-size:10px;color:var(--muted)}
+
+  /* Stopwatch + controls */
+  .controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .stopwatch{
+    font-variant-numeric:tabular-nums;font-weight:700;font-size:30px;
+    background:#0c1428;border:1px solid var(--line);border-radius:10px;
+    padding:4px 14px;min-width:118px;text-align:center;color:var(--accent);
+  }
+  .stopwatch small{font-size:14px;color:var(--muted);font-weight:600}
+  .btn{
+    border:none;border-radius:10px;padding:10px 18px;font-size:15px;font-weight:700;
+    cursor:pointer;color:#0f1830;background:var(--accent);
+  }
+  .btn:hover{filter:brightness(1.05)}
+  .btn.secondary{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  /* Graph */
+  .graphcard{flex:1;display:flex;flex-direction:column;min-height:0}
+  .canvaswrap{flex:1;position:relative;min-height:200px}
+  canvas{position:absolute;inset:0;width:100%;height:100%}
+  .toolrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:8px}
+  .toolrow label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer}
+  .toolrow .spacer{flex:1}
+
+  .legend{display:flex;flex-wrap:wrap;gap:6px 14px}
+  .legend .item{display:flex;align-items:center;gap:7px;font-size:13px}
+  .legend .sw{width:14px;height:14px;border-radius:50%;border:2px solid #fff2}
+  .legend .ans{color:var(--muted);font-size:12px}
+
+  /* Trials table */
+  .tablecard{max-height:190px;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}
+  td .sw{display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:middle;margin-right:6px}
+  .empty{color:var(--muted);font-size:13px;padding:6px 2px}
+
+  /* Modal */
+  .modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;z-index:20;padding:20px}
+  .modal.show{display:flex}
+  .modalbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:560px;padding:22px 24px;line-height:1.55}
+  .modalbox h2{margin-top:0}
+  .modalbox ol{padding-left:20px}
+  .modalbox li{margin:6px 0}
+  .modalbox .btn{margin-top:12px}
+
+  @media (max-width:880px){
+    main{flex-direction:column;height:auto;overflow:auto}
+    body{overflow:auto}
+    .left{border-right:none;border-bottom:1px solid var(--line)}
+    .canvaswrap{min-height:300px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏎️ Speed Lab</h1>
+  <span class="tag">Distance&nbsp;vs.&nbsp;Time · set up a trial, read the graph</span>
+  <span class="spacer"></span>
+  <button class="helpbtn" id="answerBtn">🔑 Answer key</button>
+  <button class="helpbtn" id="helpBtn">?&nbsp;How&nbsp;to</button>
+</header>
+
+<main>
+  <!-- LEFT: the lab bench -->
+  <section class="pane left">
+    <div class="card">
+      <h2>1 · Pick a car</h2>
+      <div class="garage" id="garage"></div>
+    </div>
+
+    <div class="card">
+      <h2>2 · Set the finish line — drag the checkered flag</h2>
+      <div class="trackwrap">
+        <div class="readout big">
+          Car: <b id="curCar">—</b> &nbsp;·&nbsp; Finish distance: <b id="curDist">2.0 m</b>
+        </div>
+        <div class="track" id="track">
+          <div class="lane"></div>
+          <div class="startline" id="startline" style="left:14px"></div>
+          <div class="car-on-track" id="trackCar"></div>
+          <div class="flag" id="flag"><div class="pole"></div><div class="checker"></div><div class="distlbl" id="flagLbl">2.0 m</div></div>
+        </div>
+        <div class="ruler" id="ruler"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3 · Run the trial</h2>
+      <div class="controls">
+        <div class="stopwatch"><span id="swTime">0.00</span><small>&nbsp;s</small></div>
+        <button class="btn" id="startBtn">▶ Start</button>
+        <button class="btn secondary" id="resetBtn">↺ Reset car</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: the graph -->
+  <section class="pane right">
+    <div class="card graphcard">
+      <h2>Distance vs. Time — every trial plots automatically</h2>
+      <div class="canvaswrap"><canvas id="graph"></canvas></div>
+      <div class="toolrow">
+        <label><input type="checkbox" id="connectChk"> Connect each car's points</label>
+        <span class="spacer"></span>
+        <button class="btn secondary" id="exportBtn">⬇ CSV</button>
+        <button class="btn secondary" id="clearBtn">Clear data</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Cars</h2>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="card tablecard">
+      <h2>Trial log</h2>
+      <table id="trialTable">
+        <thead><tr><th>#</th><th>Car</th><th>Distance (m)</th><th>Time (s)</th></tr></thead>
+        <tbody id="trialBody"></tbody>
+      </table>
+      <div class="empty" id="emptyMsg">No trials yet — run one on the left.</div>
+    </div>
+  </section>
+</main>
+
+<div class="modal" id="helpModal">
+  <div class="modalbox">
+    <h2>How to use Speed Lab</h2>
+    <ol>
+      <li><b>Pick a car</b> from the garage. Each color has its own steady speed — except one, which speeds up as it goes.</li>
+      <li><b>Drag the checkered flag</b> (or tap the ruler) to choose how far the car must travel.</li>
+      <li>Press <b>Start</b>. The car drives and the stopwatch times it. When it reaches the flag, the point <b>(time, distance)</b> appears on the graph in that car's color.</li>
+      <li>Run the same car at several distances to draw its line. Then compare cars.</li>
+    </ol>
+    <p><b>Your mission:</b> Which car is <i>accelerating</i>? Constant-speed cars make straight lines. The accelerating car makes a curve. 🧐</p>
+    <button class="btn" id="closeHelp">Got it</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- Car SVG ---------- */
+function carSVG(color){
+  return `<svg viewBox="0 0 64 34" xmlns="http://www.w3.org/2000/svg">
+    <g>
+      <path d="M4 22 Q4 15 12 14 L20 8 Q23 6 28 6 L40 6 Q45 6 48 10 L54 14 Q60 15 60 22 L60 24 Q60 26 58 26 L6 26 Q4 26 4 24 Z"
+            fill="${color}" stroke="#00000055" stroke-width="1"/>
+      <path d="M22 9 L38 9 Q42 9 44 12 L46 14 L24 14 Z" fill="#ffffff88"/>
+      <circle cx="18" cy="26" r="6" fill="#1a1a1a"/><circle cx="18" cy="26" r="2.4" fill="#888"/>
+      <circle cx="46" cy="26" r="6" fill="#1a1a1a"/><circle cx="46" cy="26" r="2.4" fill="#888"/>
+    </g>
+  </svg>`;
+}
+
+/* ---------- Build the fleet (speeds/behaviour shuffled each load) ---------- */
+const PALETTE = [
+  {id:'red',    name:'Red',    color:'#e6294b'},
+  {id:'blue',   name:'Blue',   color:'#4a7dff'},
+  {id:'green',  name:'Green',  color:'#2fbf57'},
+  {id:'orange', name:'Orange', color:'#ff8f2e'},
+  {id:'purple', name:'Purple', color:'#b45cff'},
+];
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+const CONST_SPEEDS = [1.0, 1.4, 1.9, 2.5];          // m/s for the four steady cars
+const ACCEL_A = 0.35 + Math.random()*0.15;          // m/s^2, small but noticeable
+
+const order = shuffle([0,1,2,3,4]);
+const accelIdx = order[0];                           // which palette entry accelerates
+const speedPool = shuffle(CONST_SPEEDS.slice());
+let sp = 0;
+const CARS = PALETTE.map((p,i)=>{
+  if(i===accelIdx) return {...p, type:'accel', a:ACCEL_A};
+  return {...p, type:'const', v:speedPool[sp++]};
+});
+
+/* car physics: distance travelled after t seconds */
+function distAt(car,t){ return car.type==='const' ? car.v*t : 0.5*car.a*t*t; }
+/* time to reach a given distance */
+function timeFor(car,d){ return car.type==='const' ? d/car.v : Math.sqrt(2*d/car.a); }
+
+/* ---------- Track scale ---------- */
+const MAX_D = 8.0;            // metres, full track
+const AX_TMAX = 9.0;          // graph x max (s)
+const AX_DMAX = 8.0;          // graph y max (m)
+const START_PX = 14;         // pixel x of the start line inside the track
+
+let selected = CARS[0];
+let finishDist = 2.0;        // metres
+let trials = [];
+let running = false;
+
+/* ---------- DOM ---------- */
+const $ = s=>document.querySelector(s);
+const garage = $('#garage');
+const track = $('#track');
+const trackCar = $('#trackCar');
+const flag = $('#flag');
+const flagLbl = $('#flagLbl');
+const ruler = $('#ruler');
+const curCar = $('#curCar');
+const curDist = $('#curDist');
+const swTime = $('#swTime');
+const startBtn = $('#startBtn');
+const resetBtn = $('#resetBtn');
+const legend = $('#legend');
+const trialBody = $('#trialBody');
+const emptyMsg = $('#emptyMsg');
+const connectChk = $('#connectChk');
+let answerShown = false;
+
+/* ---------- Garage ---------- */
+CARS.forEach(car=>{
+  const b = document.createElement('button');
+  b.className='carbtn'; b.dataset.id=car.id;
+  b.innerHTML = carSVG(car.color) + `<span class="nm">${car.name}</span>`;
+  b.onclick = ()=>selectCar(car);
+  garage.appendChild(b);
+});
+function selectCar(car){
+  if(running) return;
+  selected = car;
+  document.querySelectorAll('.carbtn').forEach(el=>el.classList.toggle('sel', el.dataset.id===car.id));
+  curCar.textContent = car.name;
+  trackCar.innerHTML = carSVG(car.color);
+  resetCarPosition();
+}
+
+/* ---------- Track geometry ---------- */
+function trackWidthPx(){ return track.clientWidth; }
+function usablePx(){ return trackWidthPx() - START_PX - 30; } // leave room at right
+function distToPx(d){ return START_PX + (d/MAX_D)*usablePx(); }
+function pxToDist(px){ return Math.max(0, Math.min(MAX_D, ((px-START_PX)/usablePx())*MAX_D)); }
+
+function buildRuler(){
+  ruler.innerHTML='';
+  for(let m=0;m<=MAX_D;m++){
+    const x = distToPx(m);
+    const tick = document.createElement('div');
+    tick.className='tick'; tick.style.left=x+'px'; tick.style.height='8px';
+    ruler.appendChild(tick);
+    const lbl = document.createElement('div');
+    lbl.className='lbl'; lbl.style.left=x+'px'; lbl.textContent = m + (m===MAX_D?' m':'');
+    ruler.appendChild(lbl);
+    if(m<MAX_D){ // half tick
+      const h=document.createElement('div'); h.className='tick';
+      h.style.left=distToPx(m+0.5)+'px'; h.style.height='5px'; h.style.opacity=.5;
+      ruler.appendChild(h);
+    }
+  }
+}
+function placeFlag(){
+  flag.style.left = distToPx(finishDist)+'px';
+  flagLbl.textContent = finishDist.toFixed(1)+' m';
+  curDist.textContent = finishDist.toFixed(1)+' m';
+}
+function resetCarPosition(){
+  trackCar.style.left = (START_PX-8)+'px';
+  swTime.textContent = '0.00';
+}
+
+/* ---------- Drag the flag ---------- */
+function setFinishFromClientX(clientX){
+  const rect = track.getBoundingClientRect();
+  let d = pxToDist(clientX - rect.left);
+  d = Math.max(0.5, Math.round(d*10)/10);   // snap to 0.1 m, min 0.5
+  finishDist = d;
+  placeFlag();
+}
+let dragging=false;
+flag.addEventListener('pointerdown', e=>{ if(running) return; dragging=true; flag.setPointerCapture(e.pointerId); e.preventDefault(); });
+flag.addEventListener('pointermove', e=>{ if(dragging) setFinishFromClientX(e.clientX); });
+flag.addEventListener('pointerup', ()=>{dragging=false;});
+flag.addEventListener('pointercancel', ()=>{dragging=false;});
+track.addEventListener('pointerdown', e=>{
+  if(running || e.target.closest('.flag')) return;
+  setFinishFromClientX(e.clientX);
+});
+
+/* ---------- Run a trial ---------- */
+let rafId=null;
+function startTrial(){
+  if(running) return;
+  running=true;
+  startBtn.disabled=true; resetBtn.disabled=true;
+  garage.style.pointerEvents='none';
+  const car = selected;
+  const target = finishDist;
+  const tFinish = timeFor(car, target);
+  const t0 = performance.now();
+
+  function frame(now){
+    let t = (now - t0)/1000;
+    if(t >= tFinish){
+      // land exactly on the line
+      swTime.textContent = tFinish.toFixed(2);
+      trackCar.style.left = (distToPx(target)-32)+'px';
+      recordTrial(car, target, tFinish);
+      running=false;
+      startBtn.disabled=false; resetBtn.disabled=false;
+      garage.style.pointerEvents='';
+      rafId=null;
+      return;
+    }
+    const d = distAt(car,t);
+    swTime.textContent = t.toFixed(2);
+    trackCar.style.left = (distToPx(d)-32)+'px';
+    rafId = requestAnimationFrame(frame);
+  }
+  rafId = requestAnimationFrame(frame);
+}
+startBtn.onclick = startTrial;
+resetBtn.onclick = ()=>{ if(running) return; resetCarPosition(); };
+
+function recordTrial(car,d,t){
+  trials.push({carId:car.id, name:car.name, color:car.color, d:d, t:t});
+  renderTable();
+  drawGraph();
+}
+
+/* ---------- Trial table ---------- */
+function renderTable(){
+  trialBody.innerHTML='';
+  emptyMsg.style.display = trials.length? 'none':'block';
+  trials.forEach((tr,i)=>{
+    const row=document.createElement('tr');
+    row.innerHTML = `<td>${i+1}</td>
+      <td><span class="sw" style="background:${tr.color}"></span>${tr.name}</td>
+      <td>${tr.d.toFixed(1)}</td>
+      <td>${tr.t.toFixed(2)}</td>`;
+    trialBody.appendChild(row);
+  });
+}
+
+/* ---------- Graph ---------- */
+const canvas = $('#graph');
+const ctx = canvas.getContext('2d');
+function sizeCanvas(){
+  const wrap = canvas.parentElement;
+  const dpr = window.devicePixelRatio||1;
+  canvas.width = wrap.clientWidth*dpr;
+  canvas.height = wrap.clientHeight*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  drawGraph();
+}
+function drawGraph(){
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  ctx.clearRect(0,0,W,H);
+  const padL=48, padR=16, padT=14, padB=38;
+  const plotW = W-padL-padR, plotH = H-padT-padB;
+  const tmax = AX_TMAX, dmax = AX_DMAX;
+  const X = t => padL + (t/tmax)*plotW;
+  const Y = d => padT + plotH - (d/dmax)*plotH;
+
+  // grid
+  ctx.strokeStyle='#2c3d6b'; ctx.fillStyle='#9fb0d6'; ctx.lineWidth=1;
+  ctx.font='11px -apple-system,sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let t=0;t<=tmax;t+=1){
+    const x=X(t);
+    ctx.globalAlpha = t===0?1:.35;
+    ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,padT+plotH); ctx.stroke();
+    ctx.globalAlpha=1;
+    ctx.fillText(t.toString(), x, padT+plotH+6);
+  }
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(let d=0;d<=dmax;d+=1){
+    const y=Y(d);
+    ctx.globalAlpha = d===0?1:.35;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+plotW,y); ctx.stroke();
+    ctx.globalAlpha=1;
+    ctx.fillText(d.toString(), padL-8, y);
+  }
+  // axis titles
+  ctx.fillStyle='#eaf0ff'; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.font='12px -apple-system,sans-serif';
+  ctx.fillText('Time (s)', padL+plotW/2, H-16);
+  ctx.save();
+  ctx.translate(14, padT+plotH/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('Distance (m)', 0, 0);
+  ctx.restore();
+
+  // connect lines per car
+  if(connectChk.checked){
+    const byCar={};
+    trials.forEach(tr=>{ (byCar[tr.carId]=byCar[tr.carId]||[]).push(tr); });
+    Object.values(byCar).forEach(list=>{
+      const pts=list.slice().sort((a,b)=>a.t-b.t);
+      if(pts.length<2) return;
+      ctx.strokeStyle=pts[0].color; ctx.lineWidth=2; ctx.globalAlpha=.55;
+      ctx.beginPath();
+      pts.forEach((p,i)=>{ const x=X(p.t),y=Y(p.d); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+      ctx.stroke(); ctx.globalAlpha=1;
+    });
+  }
+  // points
+  trials.forEach(tr=>{
+    const x=X(Math.min(tr.t,tmax)), y=Y(Math.min(tr.d,dmax));
+    ctx.beginPath(); ctx.arc(x,y,5.5,0,7); ctx.fillStyle=tr.color; ctx.fill();
+    ctx.lineWidth=2; ctx.strokeStyle='#0f1830'; ctx.stroke();
+  });
+}
+
+/* ---------- Legend ---------- */
+function renderLegend(){
+  legend.innerHTML='';
+  CARS.forEach(car=>{
+    const item=document.createElement('div'); item.className='item';
+    let ans='';
+    if(answerShown){
+      ans = car.type==='const'
+        ? `<span class="ans">— constant ${car.v.toFixed(1)} m/s</span>`
+        : `<span class="ans">— accelerating ${car.a.toFixed(2)} m/s²</span>`;
+    }
+    item.innerHTML = `<span class="sw" style="background:${car.color}"></span>${car.name} ${ans}`;
+    legend.appendChild(item);
+  });
+}
+
+/* ---------- Toolbar ---------- */
+connectChk.onchange = drawGraph;
+$('#clearBtn').onclick = ()=>{ if(confirm('Clear all trial data?')){ trials=[]; renderTable(); drawGraph(); } };
+$('#exportBtn').onclick = ()=>{
+  if(!trials.length){ alert('No trials to export yet.'); return; }
+  let csv='trial,car,distance_m,time_s\n';
+  trials.forEach((t,i)=>{ csv+=`${i+1},${t.name},${t.d.toFixed(1)},${t.t.toFixed(2)}\n`; });
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='speed-lab-data.csv'; a.click();
+  URL.revokeObjectURL(a.href);
+};
+$('#answerBtn').onclick = ()=>{ answerShown=!answerShown; renderLegend(); $('#answerBtn').style.opacity=answerShown?1:.75; };
+
+/* ---------- Help modal ---------- */
+$('#helpBtn').onclick = ()=>$('#helpModal').classList.add('show');
+$('#closeHelp').onclick = ()=>$('#helpModal').classList.remove('show');
+$('#helpModal').onclick = e=>{ if(e.target.id==='helpModal') $('#helpModal').classList.remove('show'); };
+
+/* ---------- Init ---------- */
+function layout(){ buildRuler(); placeFlag(); resetCarPosition(); sizeCanvas(); }
+window.addEventListener('resize', layout);
+selectCar(CARS[0]);
+renderLegend();
+renderTable();
+layout();
+</script>
+</body>
+</html>
