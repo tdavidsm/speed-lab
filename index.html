@@ -547,7 +547,19 @@ $('#exportBtn').onclick = ()=>{
   a.href=URL.createObjectURL(blob); a.download='speed-lab-data.csv'; a.click();
   URL.revokeObjectURL(a.href);
 };
-$('#answerBtn').onclick = ()=>{ answerShown=!answerShown; renderLegend(); $('#answerBtn').style.opacity=answerShown?1:.75; };
+let answerUnlocked = false;
+const ANSWER_CODE = '1253';
+$('#answerBtn').onclick = ()=>{
+  if(!answerUnlocked){
+    const code = prompt('Teacher passcode:');
+    if(code===null) return;            // cancelled
+    if(code.trim()!==ANSWER_CODE){ alert('Incorrect passcode.'); return; }
+    answerUnlocked = true;
+  }
+  answerShown = !answerShown;
+  renderLegend();
+  $('#answerBtn').style.opacity = answerShown?1:.75;
+};
 
 /* ---------- Help modal ---------- */
 $('#helpBtn').onclick = ()=>$('#helpModal').classList.add('show');
