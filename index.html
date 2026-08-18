@@ -227,12 +227,12 @@
   <div class="modalbox">
     <h2>How to use Speed Lab</h2>
     <ol>
-      <li><b>Pick a car</b> from the garage. Each color has its own steady speed — except one, which speeds up as it goes.</li>
+      <li><b>Pick a car</b> from the garage. Most colors move at a steady speed — but two of them speed up as they go (one gently, one hard).</li>
       <li><b>Drag the checkered flag</b> (or tap the ruler) to choose how far the car must travel.</li>
       <li>Press <b>Start</b>. The car drives and the stopwatch times it. When it reaches the flag, the point <b>(time, distance)</b> appears on the graph in that car's color.</li>
       <li>Run the same car at several distances to draw its line. Then compare cars.</li>
     </ol>
-    <p><b>Your mission:</b> Which car is <i>accelerating</i>? Constant-speed cars make straight lines. The accelerating car makes a curve. 🧐</p>
+    <p><b>Your mission:</b> Which cars are <i>accelerating</i>? Constant-speed cars make straight lines; an accelerating car curves upward — and the harder it accelerates, the more sharply it bends. 🧐</p>
     <button class="btn" id="closeHelp">Got it</button>
   </div>
 </div>
@@ -263,15 +263,18 @@ const PALETTE = [
 ];
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
-const CONST_SPEEDS = [1.0, 1.4, 1.9, 2.5];          // m/s for the four steady cars
-const ACCEL_A = 0.35 + Math.random()*0.15;          // m/s^2, small but noticeable
+const CONST_SPEEDS = [1.0, 1.6, 2.3];               // m/s for the three steady cars
+const GENTLE_A = 0.35 + Math.random()*0.15;         // m/s^2, small but noticeable
+const FAST_A   = 1.0;                               // m/s^2, reaches 8 m in 4 s
 
 const order = shuffle([0,1,2,3,4]);
-const accelIdx = order[0];                           // which palette entry accelerates
+const fastIdx   = order[0];                          // faster accelerator
+const gentleIdx = order[1];                          // gentle accelerator
 const speedPool = shuffle(CONST_SPEEDS.slice());
 let sp = 0;
 const CARS = PALETTE.map((p,i)=>{
-  if(i===accelIdx) return {...p, type:'accel', a:ACCEL_A};
+  if(i===fastIdx)   return {...p, type:'accel', a:FAST_A};
+  if(i===gentleIdx) return {...p, type:'accel', a:GENTLE_A};
   return {...p, type:'const', v:speedPool[sp++]};
 });
 
@@ -281,10 +284,12 @@ function distAt(car,t){ return car.type==='const' ? car.v*t : 0.5*car.a*t*t; }
 function timeFor(car,d){ return car.type==='const' ? d/car.v : Math.sqrt(2*d/car.a); }
 
 /* ---------- Track scale ---------- */
-const MAX_D = 8.0;            // metres, full track
+const MAX_D = 8.0;            // metres, full track (max finish distance)
 const AX_TMAX = 9.0;          // graph x max (s)
 const AX_DMAX = 8.0;          // graph y max (m)
-const START_PX = 14;         // pixel x of the start line inside the track
+const CAR_W = 64;            // car sprite width in px; the nose is its right edge
+const START_PX = 78;         // pixel x of the start line (room for a full car behind it)
+const RIGHT_RUNOUT = 96;     // px past the 8 m mark so cars keep driving off the end
 
 let selected = CARS[0];
 let finishDist = 2.0;        // metres
@@ -329,9 +334,10 @@ function selectCar(car){
 
 /* ---------- Track geometry ---------- */
 function trackWidthPx(){ return track.clientWidth; }
-function usablePx(){ return trackWidthPx() - START_PX - 30; } // leave room at right
-function distToPx(d){ return START_PX + (d/MAX_D)*usablePx(); }
+function usablePx(){ return trackWidthPx() - START_PX - RIGHT_RUNOUT; } // 0..8 m span
+function distToPx(d){ return START_PX + (d/MAX_D)*usablePx(); }        // px of nose at distance d
 function pxToDist(px){ return Math.max(0, Math.min(MAX_D, ((px-START_PX)/usablePx())*MAX_D)); }
+function trackEndDist(){ return MAX_D * (trackWidthPx()-START_PX) / usablePx(); } // nose reaches right edge
 
 function buildRuler(){
   ruler.innerHTML='';
@@ -356,7 +362,7 @@ function placeFlag(){
   curDist.textContent = finishDist.toFixed(1)+' m';
 }
 function resetCarPosition(){
-  trackCar.style.left = (START_PX-8)+'px';
+  trackCar.style.left = (START_PX-CAR_W)+'px';  // nose exactly on the start line
   swTime.textContent = '0.00';
 }
 
@@ -387,25 +393,36 @@ function startTrial(){
   garage.style.pointerEvents='none';
   const car = selected;
   const target = finishDist;
-  const tFinish = timeFor(car, target);
+  const tFinish = timeFor(car, target);   // clock stops when the NOSE reaches the flag
+  const dEnd = trackEndDist();            // car keeps going until its nose reaches the track's end
   const t0 = performance.now();
+  let recorded = false;
 
   function frame(now){
-    let t = (now - t0)/1000;
-    if(t >= tFinish){
-      // land exactly on the line
-      swTime.textContent = tFinish.toFixed(2);
-      trackCar.style.left = (distToPx(target)-32)+'px';
-      recordTrial(car, target, tFinish);
+    const t = (now - t0)/1000;
+    let d = distAt(car,t);
+    const done = d >= dEnd;
+    if(done) d = dEnd;
+    trackCar.style.left = (distToPx(d)-CAR_W)+'px';   // nose = distToPx(d)
+
+    // freeze the stopwatch + record the point the moment the nose crosses the finish line
+    if(!recorded){
+      if(t >= tFinish){
+        swTime.textContent = tFinish.toFixed(2);
+        recordTrial(car, target, tFinish);
+        recorded = true;
+      } else {
+        swTime.textContent = t.toFixed(2);
+      }
+    }
+
+    if(done && recorded){
       running=false;
       startBtn.disabled=false; resetBtn.disabled=false;
       garage.style.pointerEvents='';
       rafId=null;
       return;
     }
-    const d = distAt(car,t);
-    swTime.textContent = t.toFixed(2);
-    trackCar.style.left = (distToPx(d)-32)+'px';
     rafId = requestAnimationFrame(frame);
   }
   rafId = requestAnimationFrame(frame);
@@ -538,7 +555,7 @@ $('#closeHelp').onclick = ()=>$('#helpModal').classList.remove('show');
 $('#helpModal').onclick = e=>{ if(e.target.id==='helpModal') $('#helpModal').classList.remove('show'); };
 
 /* ---------- Init ---------- */
-function layout(){ buildRuler(); placeFlag(); resetCarPosition(); sizeCanvas(); }
+function layout(){ $('#startline').style.left=START_PX+'px'; buildRuler(); placeFlag(); resetCarPosition(); sizeCanvas(); }
 window.addEventListener('resize', layout);
 selectCar(CARS[0]);
 renderLegend();
