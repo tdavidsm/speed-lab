@@ -453,15 +453,16 @@ function renderTable(){
 /* ---------- Graph ---------- */
 const canvas = $('#graph');
 const ctx = canvas.getContext('2d');
-function sizeCanvas(){
+function sizeCanvas(){ drawGraph(); }  // kept for callers; drawGraph self-sizes below
+function drawGraph(){
+  // Re-sync the backing store to the CSS box on every draw. The plot area can
+  // change height as the trial log grows, and a stale backing store leaves
+  // "shadow" copies of earlier renders until the next window resize.
   const wrap = canvas.parentElement;
   const dpr = window.devicePixelRatio||1;
-  canvas.width = wrap.clientWidth*dpr;
-  canvas.height = wrap.clientHeight*dpr;
+  const bw = Math.round(wrap.clientWidth*dpr), bh = Math.round(wrap.clientHeight*dpr);
+  if(canvas.width!==bw || canvas.height!==bh){ canvas.width=bw; canvas.height=bh; }
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  drawGraph();
-}
-function drawGraph(){
   const W = canvas.clientWidth, H = canvas.clientHeight;
   ctx.clearRect(0,0,W,H);
   const padL=48, padR=16, padT=14, padB=38;
